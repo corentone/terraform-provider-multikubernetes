@@ -17,7 +17,7 @@ import (
 	tf5muxserver "github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
 
 	//framework "github.com/hashicorp/terraform-provider-kubernetes/internal/framework/provider"
-	"github.com/corentone/terraform-provider-fleet-kubernetes/allresourcesprovider"
+	"github.com/corentone/terraform-provider-multi-kubernetes/allresourcesprovider"
 	//manifest "github.com/hashicorp/terraform-provider-kubernetes/manifest/provider"
 )
 
