@@ -17,12 +17,12 @@ import (
 	tf5muxserver "github.com/hashicorp/terraform-plugin-mux/tf5muxserver"
 
 	//framework "github.com/hashicorp/terraform-provider-kubernetes/internal/framework/provider"
-	"github.com/corentone/terraform-provider-multi-kubernetes/allresourcesprovider"
+	"github.com/corentone/terraform-provider-multikubernetes/allresourcesprovider"
 	//manifest "github.com/hashicorp/terraform-provider-kubernetes/manifest/provider"
 )
 
 const (
-	providerName = "registry.terraform.io/hashicorp/kubernetes"
+	providerName = "boomboom"
 
 	Version = "dev"
 )
@@ -80,7 +80,7 @@ func convertReattachConfig(reattachConfig *plugin.ReattachConfig) tfexec.Reattac
 // to set the TF_REATTACH_PROVIDERS variable
 func printReattachConfig(config *plugin.ReattachConfig) {
 	reattachStr, err := json.Marshal(map[string]tfexec.ReattachConfig{
-		"kubernetes": convertReattachConfig(config),
+		"multikubernetes": convertReattachConfig(config),
 	})
 	if err != nil {
 		fmt.Printf("Error building reattach string: %s", err)

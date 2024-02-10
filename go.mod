@@ -1,4 +1,4 @@
-module github.com/corentone/terraform-provider-multi-kubernetes
+module github.com/corentone/terraform-provider-multikubernetes
 
 go 1.21.6
 
