@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	providerName = "boomboom"
+	providerName = "local/corentone/multikubernetes"
 
 	Version = "dev"
 )

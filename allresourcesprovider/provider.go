@@ -23,20 +23,7 @@ func NewProvider() *Provider {
 
 func (p *Provider) TFProvider() *schema.Provider {
 	tfprovider := &schema.Provider{
-		Schema: map[string]*schema.Schema{
-			"per_cluster": {
-				Type: schema.TypeMap,
-				Optional: true,
-				Elem: &schema.Schema{
-					Type: schema.TypeList,
-					Optional: true,
-					MaxItems: 1,
-					Elem: &schema.Resource{
-						Schema:p.singleClusterProvider.Schema,
-					},
-				},
-			},
-		},
+		Schema: p.schemaFromOriginal(),
 		ResourcesMap:   p.buildResourcesMap(p.singleClusterProvider),
 		DataSourcesMap: p.buildDataSourcesMap(p.singleClusterProvider),
 	}
@@ -50,21 +37,24 @@ func (p *Provider) TFProvider() *schema.Provider {
 func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVersion string, singleClusterProvider *schema.Provider) (interface{}, diag.Diagnostics) {
 
 	clientSets := map[string]kubernetes.KubeClientsets{}
-	if v, ok := d.GetOk("per_cluster"); ok {
-		for clusterName, clusterConfig := range v.(map[string]interface{}) {
-			if perClusterConfigResourceData, ok := clusterConfig.([]interface{})[0].(map[string]interface{}); ok {
-				perClusterConfigResourceDataAsResourceData := perClusterConfigResourceData.(schema.ResourceData)
-				clientset, diags := singleClusterProvider.ConfigureContextFunc(ctx, perClusterConfigResourceDataAsResourceData)
-				if diags.HasError() {
-					return nil, diags
-				}
-				clientSets[clusterName] = clientset.(kubernetes.KubeClientsets)
-			} else {
-				return nil, fmt.Errorf("Failed to parse per_cluster")
+	if configClusters, ok := d.GetOk("cluster"); ok {
+		for _, configCluster := range configClusters.([]interface{}) {
+			perClusterConfigData, ok := configCluster.(map[string]interface{});
+			if  !ok {
+				return nil, diag.FromErr(fmt.Errorf("Failed to parse cluster %v", configCluster))
 			}
+
+			clusterName := perClusterConfigData["cluster_name"].(string)
+
+			gettableResourceData := localResourceData{perClusterConfigResourceData:perClusterConfigData}
+			clientset, diags := duplicatedProviderConfigure(ctx, gettableResourceData, terraformVersion)
+			if diags.HasError() {
+				return nil, diags
+			}
+			clientSets[clusterName] = clientset.(kubernetes.KubeClientsets)
 		}
 	} else {
-		return nil, fmt.Errorf("cant find per_cluster")
+		return nil, diag.FromErr(fmt.Errorf("cant find cluster"))
 	}
 
 
@@ -137,4 +127,58 @@ func (p *ProviderContextMeta) clientSetFromSchema(d *schema.ResourceData) (kuber
 		return nil, fmt.Errorf("Cluster not Found")
 	}
 	return clientSet, nil
+}
+
+
+/*
+The schema as being defined by the original provider and added to the list doesn't seem to work.
+I'm guessing I need to simplify it sadly.
+
+Error: Incorrect attribute value type
+
+  on main.tf line 12, in provider "multikubernetes":
+  12:   per_cluster = {
+  13:     corentin = [{
+  14:       host  = "host.com"
+  15:       exec = {
+  16:         api_version = "client.authentication.k8s.io/v1beta1"
+  17:         command     = "gke-gcloud-auth-plugin"
+  18:       }
+  19:     }]
+  20:   }
+
+Inappropriate value for attribute "per_cluster": element "corentin": element
+0: attributes "client_certificate", "client_key", "cluster_ca_certificate",
+"config_context", "config_context_auth_info", "config_context_cluster",
+"config_path", "config_paths", "experiments", "ignore_annotations",
+"ignore_labels", "insecure", "password", "proxy_url", "tls_server_name",
+"token", and "username" are required.
+
+
+*/
+func (p *Provider) schemaFromOriginal() map[string]*schema.Schema {
+
+	// Our schema is literally the existing schema, with an additional key called cluster_name,
+	// similarly to every resource we have.
+	perClusterSchema := p.singleClusterProvider.Schema
+	perClusterSchema["cluster_name"] = &schema.Schema{
+		Type: schema.TypeString,
+		Required: true,
+		Description: "Cluster Name to which the config refers",
+	}
+
+	// Hotfix so that ConflictsWith works.
+	// sadly that removes it but it's not supported in a TypeList
+	// https://github.com/hashicorp/terraform-plugin-sdk/issues/71
+	perClusterSchema["config_path"].ConflictsWith = nil
+
+	return map[string]*schema.Schema{
+		"cluster": {
+			Type: schema.TypeList,
+			Optional: true,
+			Elem: &schema.Resource{
+				Schema: perClusterSchema,
+			},
+		},
+	}
 }
