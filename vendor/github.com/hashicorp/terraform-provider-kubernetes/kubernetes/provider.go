@@ -361,7 +361,7 @@ func Provider() *schema.Provider {
 	}
 
 	p.ConfigureContextFunc = func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-		return providerConfigure(ctx, d, p.TerraformVersion)
+		return ProviderConfigure(ctx, d, p.TerraformVersion)
 	}
 
 	return p
@@ -446,7 +446,16 @@ func (k kubeClientsets) DiscoveryClient() (discovery.DiscoveryInterface, error) 
 	return k.discoveryClient, nil
 }
 
-func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVersion string) (interface{}, diag.Diagnostics) {
+// configurationGetter is an interface that allows querying keys in a config object.
+// It is used to parse the configuration of the provider. The interface makes it easier
+// to use in the configuration setup since it only needs to be able to read from the config.
+// It also allows other uses of the method to work.
+type configurationGetter interface {
+	Get(string)interface{}
+	GetOk(string)(interface{},bool)
+}
+
+func ProviderConfigure(ctx context.Context, d configurationGetter, terraformVersion string) (interface{}, diag.Diagnostics) {
 	// Config initialization
 	cfg, err := initializeConfiguration(d)
 	if err != nil {
@@ -489,7 +498,7 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVer
 	return m, diag.Diagnostics{}
 }
 
-func initializeConfiguration(d *schema.ResourceData) (*restclient.Config, error) {
+func initializeConfiguration(d configurationGetter) (*restclient.Config, error) {
 	overrides := &clientcmd.ConfigOverrides{}
 	loader := &clientcmd.ClientConfigLoadingRules{}
 

@@ -17,4 +17,54 @@ description: |-
 
 ### Optional
 
-- `per_cluster` (Map of List of Object)
+- `cluster` (Block List) (see [below for nested schema](#nestedblock--cluster))
+
+<a id="nestedblock--cluster"></a>
+### Nested Schema for `cluster`
+
+Required:
+
+- `cluster_name` (String) Cluster Name to which the config refers
+
+Optional:
+
+- `client_certificate` (String) PEM-encoded client certificate for TLS authentication.
+- `client_key` (String) PEM-encoded client certificate key for TLS authentication.
+- `cluster_ca_certificate` (String) PEM-encoded root certificates bundle for TLS authentication.
+- `config_context` (String)
+- `config_context_auth_info` (String)
+- `config_context_cluster` (String)
+- `config_path` (String) Path to the kube config file. Can be set with KUBE_CONFIG_PATH.
+- `config_paths` (List of String) A list of paths to kube config files. Can be set with KUBE_CONFIG_PATHS environment variable.
+- `exec` (Block List, Max: 1) (see [below for nested schema](#nestedblock--cluster--exec))
+- `experiments` (Block List, Max: 1) Enable and disable experimental features. (see [below for nested schema](#nestedblock--cluster--experiments))
+- `host` (String) The hostname (in form of URI) of Kubernetes master.
+- `ignore_annotations` (List of String) List of Kubernetes metadata annotations to ignore across all resources handled by this provider for situations where external systems are managing certain resource annotations. Each item is a regular expression.
+- `ignore_labels` (List of String) List of Kubernetes metadata labels to ignore across all resources handled by this provider for situations where external systems are managing certain resource labels. Each item is a regular expression.
+- `insecure` (Boolean) Whether server should be accessed without verifying the TLS certificate.
+- `password` (String) The password to use for HTTP basic authentication when accessing the Kubernetes master endpoint.
+- `proxy_url` (String) URL to the proxy to be used for all API requests
+- `tls_server_name` (String) Server name passed to the server for SNI and is used in the client to check server certificates against.
+- `token` (String) Token to authenticate an service account
+- `username` (String) The username to use for HTTP basic authentication when accessing the Kubernetes master endpoint.
+
+<a id="nestedblock--cluster--exec"></a>
+### Nested Schema for `cluster.exec`
+
+Required:
+
+- `api_version` (String)
+- `command` (String)
+
+Optional:
+
+- `args` (List of String)
+- `env` (Map of String)
+
+
+<a id="nestedblock--cluster--experiments"></a>
+### Nested Schema for `cluster.experiments`
+
+Optional:
+
+- `manifest_resource` (Boolean) Enable the `kubernetes_manifest` resource.

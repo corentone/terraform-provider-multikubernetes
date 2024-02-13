@@ -28,14 +28,13 @@ func (p *Provider) TFProvider() *schema.Provider {
 		DataSourcesMap: p.buildDataSourcesMap(p.singleClusterProvider),
 	}
 	tfprovider.ConfigureContextFunc = func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
-		return providerConfigure(ctx, d, p.TerraformVersion, p.singleClusterProvider)
+		return p.ProviderConfigure(ctx, d, p.TerraformVersion, p.singleClusterProvider)
 	}
 
 	return tfprovider
 }
 
-func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVersion string, singleClusterProvider *schema.Provider) (interface{}, diag.Diagnostics) {
-
+func (p *Provider) ProviderConfigure(ctx context.Context, d GettableData, terraformVersion string, singleClusterProvider *schema.Provider) (interface{}, diag.Diagnostics) {
 	clientSets := map[string]kubernetes.KubeClientsets{}
 	if configClusters, ok := d.GetOk("cluster"); ok {
 		for _, configCluster := range configClusters.([]interface{}) {
@@ -47,7 +46,11 @@ func providerConfigure(ctx context.Context, d *schema.ResourceData, terraformVer
 			clusterName := perClusterConfigData["cluster_name"].(string)
 
 			gettableResourceData := localResourceData{perClusterConfigResourceData:perClusterConfigData}
-			clientset, diags := duplicatedProviderConfigure(ctx, gettableResourceData, terraformVersion)
+
+			// we don't need our duplicatedProviderConfigure with the fork
+			// https://github.com/corentone/terraform-provider-kubernetes/commit/e1807056869087ea69b707aa37fc7f2314b99e05
+			//clientset, diags := duplicatedProviderConfigure(ctx, gettableResourceData, terraformVersion)
+			clientset, diags := kubernetes.ProviderConfigure(ctx, gettableResourceData, terraformVersion)
 			if diags.HasError() {
 				return nil, diags
 			}

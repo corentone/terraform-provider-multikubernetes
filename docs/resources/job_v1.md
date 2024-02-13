@@ -63,6 +63,7 @@ Optional:
 - `completions` (Number) Specifies the desired number of successfully finished pods the job should be run with. Setting to nil means that the success of any pod signals the success of all pods, and allows parallelism to have any positive value. Setting to 1 means that parallelism is limited to 1 and the success of that pod signals the success of the job. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/
 - `manual_selector` (Boolean) Controls generation of pod labels and pod selectors. Leave unset unless you are certain what you are doing. When false or unset, the system pick labels unique to this job and appends those labels to the pod template. When true, the user is responsible for picking unique labels and specifying the selector. Failure to pick a unique label may cause this and other jobs to not function correctly. More info: https://git.k8s.io/community/contributors/design-proposals/selector-generation.md
 - `parallelism` (Number) Specifies the maximum desired number of pods the job should run at any given time. The actual number of pods running in steady state will be less than this number when ((.spec.completions - .status.successful) < .spec.parallelism), i.e. when the work left to do is less than max parallelism. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/
+- `pod_failure_policy` (Block List, Max: 1) Specifies the maximum desired number of pods the job should run at any given time. The actual number of pods running in steady state will be less than this number when ((.spec.completions - .status.successful) < .spec.parallelism), i.e. when the work left to do is less than max parallelism. More info: https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/ (see [below for nested schema](#nestedblock--spec--pod_failure_policy))
 - `selector` (Block List, Max: 1) A label query over volumes to consider for binding. (see [below for nested schema](#nestedblock--spec--selector))
 - `ttl_seconds_after_finished` (String) ttlSecondsAfterFinished limits the lifetime of a Job that has finished execution (either Complete or Failed). If this field is set, ttlSecondsAfterFinished after the Job finishes, it is eligible to be automatically deleted. When the Job is being deleted, its lifecycle guarantees (e.g. finalizers) will be honored. If this field is unset, the Job won't be automatically deleted. If this field is set to zero, the Job becomes eligible to be deleted immediately after it finishes.
 
@@ -1784,7 +1785,7 @@ Optional:
 
 Optional:
 
-- `medium` (String) What type of storage medium should back this directory. The default is "" which means to use the node's default medium. Must be an empty string (default) or Memory. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
+- `medium` (String) What type of storage medium should back this directory. The default is "" which means to use the node's default medium. Must be one of ["" "Memory" "HugePages" "HugePages-2Mi" "HugePages-1Gi"]. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir
 - `size_limit` (String) Total amount of local storage required for this EmptyDir volume.
 
 
@@ -2206,6 +2207,46 @@ Optional:
 
 - `fs_type` (String) Filesystem type to mount. Must be a filesystem type supported by the host operating system. Ex. "ext4", "xfs", "ntfs". Implicitly inferred to be "ext4" if unspecified.
 
+
+
+
+
+<a id="nestedblock--spec--pod_failure_policy"></a>
+### Nested Schema for `spec.pod_failure_policy`
+
+Required:
+
+- `rule` (Block List, Min: 1) A label query over volumes to consider for binding. (see [below for nested schema](#nestedblock--spec--pod_failure_policy--rule))
+
+<a id="nestedblock--spec--pod_failure_policy--rule"></a>
+### Nested Schema for `spec.pod_failure_policy.rule`
+
+Optional:
+
+- `action` (String)
+- `on_exit_codes` (Block List, Max: 1) (see [below for nested schema](#nestedblock--spec--pod_failure_policy--rule--on_exit_codes))
+- `on_pod_condition` (Block List) (see [below for nested schema](#nestedblock--spec--pod_failure_policy--rule--on_pod_condition))
+
+<a id="nestedblock--spec--pod_failure_policy--rule--on_exit_codes"></a>
+### Nested Schema for `spec.pod_failure_policy.rule.on_exit_codes`
+
+Required:
+
+- `values` (List of Number)
+
+Optional:
+
+- `container_name` (String)
+- `operator` (String)
+
+
+<a id="nestedblock--spec--pod_failure_policy--rule--on_pod_condition"></a>
+### Nested Schema for `spec.pod_failure_policy.rule.on_pod_condition`
+
+Optional:
+
+- `status` (String)
+- `type` (String)
 
 
 
