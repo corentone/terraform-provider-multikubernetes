@@ -112,7 +112,7 @@ func wrapOriginalActionContext(originalFunc func(ctx context.Context, d *schema.
 func AddClusterToSchema(originalSchema map[string]*schema.Schema) map[string]*schema.Schema {
 	originalSchema["cluster"] = &schema.Schema{
 		Type:        schema.TypeString,
-		Description: "Cluster to which apply the resource",
+		Description: "Cluster to which apply the resource.",
 		ForceNew:    true,
 		Required:     true,
 	}
@@ -167,7 +167,7 @@ func (p *Provider) schemaFromOriginal() map[string]*schema.Schema {
 	perClusterSchema["cluster_name"] = &schema.Schema{
 		Type: schema.TypeString,
 		Required: true,
-		Description: "Cluster Name to which the config refers",
+		Description: "Cluster Name to which the config refers.",
 	}
 
 	// Hotfix so that ConflictsWith works.

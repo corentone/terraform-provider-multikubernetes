@@ -36,6 +36,11 @@ github.com/fatih/camelcase
 # github.com/fatih/color v1.13.0
 ## explicit; go 1.13
 github.com/fatih/color
+# github.com/getkin/kin-openapi v0.111.0
+## explicit; go 1.16
+github.com/getkin/kin-openapi/jsoninfo
+github.com/getkin/kin-openapi/openapi2
+github.com/getkin/kin-openapi/openapi3
 # github.com/go-errors/errors v1.4.2
 ## explicit; go 1.14
 github.com/go-errors/errors
@@ -182,9 +187,14 @@ github.com/hashicorp/terraform-plugin-sdk/v2/internal/plugin/convert
 github.com/hashicorp/terraform-plugin-sdk/v2/internal/tfdiags
 github.com/hashicorp/terraform-plugin-sdk/v2/meta
 github.com/hashicorp/terraform-plugin-sdk/v2/terraform
-# github.com/hashicorp/terraform-provider-kubernetes v1.13.4-0.20240108150423-ccd97a787308 => github.com/corentone/terraform-provider-kubernetes v0.0.0-20240213000627-e18070568690
+# github.com/hashicorp/terraform-provider-kubernetes v1.13.4-0.20240108150423-ccd97a787308 => github.com/corentone/terraform-provider-kubernetes v0.0.0-20240213190004-b8147f1d7508
 ## explicit; go 1.21
 github.com/hashicorp/terraform-provider-kubernetes/kubernetes
+github.com/hashicorp/terraform-provider-kubernetes/manifest
+github.com/hashicorp/terraform-provider-kubernetes/manifest/morph
+github.com/hashicorp/terraform-provider-kubernetes/manifest/openapi
+github.com/hashicorp/terraform-provider-kubernetes/manifest/payload
+github.com/hashicorp/terraform-provider-kubernetes/manifest/provider
 github.com/hashicorp/terraform-provider-kubernetes/util
 # github.com/hashicorp/terraform-registry-address v0.2.3
 ## explicit; go 1.19
@@ -201,6 +211,9 @@ github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
+# github.com/invopop/yaml v0.2.0
+## explicit; go 1.14
+github.com/invopop/yaml
 # github.com/jinzhu/copier v0.3.5
 ## explicit; go 1.13
 github.com/jinzhu/copier
@@ -236,6 +249,9 @@ github.com/mitchellh/go-testing-interface
 # github.com/mitchellh/go-wordwrap v1.0.1
 ## explicit; go 1.14
 github.com/mitchellh/go-wordwrap
+# github.com/mitchellh/hashstructure v1.1.0
+## explicit; go 1.14
+github.com/mitchellh/hashstructure
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
@@ -256,6 +272,9 @@ github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.2
 ## explicit; go 1.12
 github.com/modern-go/reflect2
+# github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
+## explicit
+github.com/mohae/deepcopy
 # github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
 ## explicit
 github.com/monochromegane/go-gitignore
@@ -317,6 +336,12 @@ go.starlark.net/resolve
 go.starlark.net/starlark
 go.starlark.net/starlarkstruct
 go.starlark.net/syntax
+# golang.org/x/exp v0.0.0-20230809150735-7b3493d9a819
+## explicit; go 1.20
+golang.org/x/exp/maps
+# golang.org/x/mod v0.14.0
+## explicit; go 1.18
+golang.org/x/mod/semver
 # golang.org/x/net v0.19.0
 ## explicit; go 1.18
 golang.org/x/net/http/httpguts
@@ -534,6 +559,12 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
+# k8s.io/apiextensions-apiserver v0.28.6
+## explicit; go 1.20
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/install
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
+k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1
 # k8s.io/apimachinery v0.28.6
 ## explicit; go 1.20
 k8s.io/apimachinery/pkg/api/equality
@@ -922,4 +953,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
-# github.com/hashicorp/terraform-provider-kubernetes => github.com/corentone/terraform-provider-kubernetes v0.0.0-20240213000627-e18070568690
+# github.com/hashicorp/terraform-provider-kubernetes => github.com/corentone/terraform-provider-kubernetes v0.0.0-20240213190004-b8147f1d7508

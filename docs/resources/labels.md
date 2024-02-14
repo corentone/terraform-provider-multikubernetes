@@ -18,7 +18,7 @@ description: |-
 ### Required
 
 - `api_version` (String) The apiVersion of the resource to label.
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `kind` (String) The kind of the resource to label.
 - `labels` (Map of String) A map of labels to apply to the resource.
 - `metadata` (Block List, Min: 1, Max: 1) (see [below for nested schema](#nestedblock--metadata))

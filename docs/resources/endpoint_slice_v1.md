@@ -18,7 +18,7 @@ description: |-
 ### Required
 
 - `address_type` (String) address_type specifies the type of address carried by this EndpointSlice. All addresses in this slice must be the same type. This field is immutable after creation.
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `endpoint` (Block List, Min: 1, Max: 1000) endpoint is a list of unique endpoints in this slice. Each slice may include a maximum of 1000 endpoints. (see [below for nested schema](#nestedblock--endpoint))
 - `metadata` (Block List, Min: 1, Max: 1) Standard endpoint_slice's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata (see [below for nested schema](#nestedblock--metadata))
 - `port` (Block List, Min: 1, Max: 100) port specifies the list of network ports exposed by each endpoint in this slice. Each port must have a unique name. Each slice may include a maximum of 100 ports. (see [below for nested schema](#nestedblock--port))

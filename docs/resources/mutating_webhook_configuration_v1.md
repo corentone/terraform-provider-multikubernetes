@@ -17,7 +17,7 @@ description: |-
 
 ### Required
 
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `metadata` (Block List, Min: 1, Max: 1) Standard mutating webhook configuration's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata (see [below for nested schema](#nestedblock--metadata))
 - `webhook` (Block List, Min: 1) Webhooks is a list of webhooks and the affected resources and operations. (see [below for nested schema](#nestedblock--webhook))
 

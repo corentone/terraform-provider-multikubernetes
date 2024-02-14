@@ -17,7 +17,7 @@ description: |-
 
 ### Required
 
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `metadata` (Block List, Min: 1, Max: 1) Standard horizontal pod autoscaler's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata (see [below for nested schema](#nestedblock--metadata))
 - `spec` (Block List, Min: 1, Max: 1) Behaviour of the autoscaler. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status (see [below for nested schema](#nestedblock--spec))
 

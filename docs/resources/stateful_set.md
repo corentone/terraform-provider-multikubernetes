@@ -17,7 +17,7 @@ description: |-
 
 ### Required
 
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `metadata` (Block List, Min: 1, Max: 1) Standard stateful set's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata (see [below for nested schema](#nestedblock--metadata))
 - `spec` (Block List, Min: 1, Max: 1) Spec defines the desired identities of pods in this set. (see [below for nested schema](#nestedblock--spec))
 

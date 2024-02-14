@@ -18,6 +18,7 @@ import (
 
 	//framework "github.com/hashicorp/terraform-provider-kubernetes/internal/framework/provider"
 	"github.com/corentone/terraform-provider-multikubernetes/allresourcesprovider"
+	"github.com/corentone/terraform-provider-multikubernetes/genericprovider"
 	//manifest "github.com/hashicorp/terraform-provider-kubernetes/manifest/provider"
 )
 
@@ -36,8 +37,7 @@ func main() {
 
 	providers := []func() tfprotov5.ProviderServer{
 		allresourcesprovider.NewProvider().TFProvider().GRPCProvider,
-		// manifest.Provider(),
-		//providerserver.NewProtocol5(framework.New(Version)),
+		genericprovider.NewProvider().TFProvider,
 	}
 	ctx := context.Background()
 	muxer, err := tf5muxserver.NewMuxServer(ctx, providers...)

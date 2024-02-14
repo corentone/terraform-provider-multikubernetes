@@ -18,7 +18,7 @@ description: |-
 ### Required
 
 - `api_version` (String) The apiVersion of the resource to annotate.
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `kind` (String) The kind of the resource to annotate.
 - `metadata` (Block List, Min: 1, Max: 1) (see [below for nested schema](#nestedblock--metadata))
 

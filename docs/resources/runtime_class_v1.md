@@ -17,7 +17,7 @@ description: |-
 
 ### Required
 
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `handler` (String) Specifies the underlying runtime and configuration that the CRI implementation will use to handle pods of this class
 - `metadata` (Block List, Min: 1, Max: 1) Standard runtimeclass's metadata. More info: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#metadata (see [below for nested schema](#nestedblock--metadata))
 

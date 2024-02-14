@@ -18,7 +18,7 @@ description: |-
 ### Required
 
 - `api_version` (String) Resource API version
-- `cluster` (String) Cluster to which apply the resource
+- `cluster` (String) Cluster to which apply the resource.
 - `env` (Block List, Min: 1) List of custom values used to represent environment variables (see [below for nested schema](#nestedblock--env))
 - `kind` (String) Resource Kind
 - `metadata` (Block List, Min: 1, Max: 1) (see [below for nested schema](#nestedblock--metadata))

@@ -24,7 +24,7 @@ description: |-
 
 Required:
 
-- `cluster_name` (String) Cluster Name to which the config refers
+- `cluster_name` (String) Cluster Name to which the config refers.
 
 Optional:
 
