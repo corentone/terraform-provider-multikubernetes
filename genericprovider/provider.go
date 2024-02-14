@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"golang.org/x/exp/maps"
+	"strings"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
@@ -299,98 +300,75 @@ func (p *Provider) ReadResource(ctx context.Context, req *tfprotov5.ReadResource
 func (p *Provider) PlanResourceChange(ctx context.Context, req *tfprotov5.PlanResourceChangeRequest) (*tfprotov5.PlanResourceChangeResponse, error) {
 	response := &tfprotov5.PlanResourceChangeResponse{}
 
-	// New State
-	{
-		config := req.ProposedNewState
-		// TODO read cluster with a function
-		cfgType := manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[req.TypeName])
-		cfgVal, err := config.Unmarshal(cfgType)
-		if err != nil {
-			response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
-				Severity: tfprotov5.DiagnosticSeverityError,
-				Summary:  "Failed to decode Provider Configuration parameter",
-				Detail:   err.Error(),
-			})
-			return response, nil
-		}
+	response.RequiresReplace = append(response.RequiresReplace,
+		tftypes.NewAttributePath().WithAttributeName("cluster"),
+	)
 
-		var resourceConfig map[string]tftypes.Value
-		err = cfgVal.As(&resourceConfig)
-		if err != nil {
-			// invalid configuration schema - this shouldn't happen, bail out now
-			response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
-				Severity: tfprotov5.DiagnosticSeverityError,
-				Summary:  "Provider configuration: failed to extract 'config_path' value",
-				Detail:   err.Error(),
-			})
-			return response, nil
-		}
-
-		p.logger.Trace("[Multi-PlanResourceChange] Got new cluster config", "resourceConfig", resourceConfig)
-
-		var clusterName string
-		err = resourceConfig["cluster"].As(&clusterName)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't unpack the clustername(val=%v), got:%w", resourceConfig["cluster"], err)
-		}
-
-		singleClusterProvider, found := p.singleClusterProviders[clusterName]
-		if !found {
-			return nil, fmt.Errorf("single cluster provider not found, %v", clusterName)
-		}
-
-		//TODO call the underlying provider.
-		p.logger.Trace("[Multi-PlanResourceChange] NEW Got", "provider", singleClusterProvider, "cluster", clusterName)
-		response.PlannedState = config
+	oldClusterName, diagnostics, err := p.extractClusterName(req.TypeName, req.PriorState)
+	response.Diagnostics = append(response.Diagnostics, diagnostics...)
+	if err != nil {
+		return response, err
 	}
-	{
-		config := req.PriorState
-		// TODO read cluster with a function
-		cfgType := manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[req.TypeName])
-		cfgVal, err := config.Unmarshal(cfgType)
-		if err != nil {
-			response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
-				Severity: tfprotov5.DiagnosticSeverityError,
-				Summary:  "Failed to decode Provider Configuration parameter",
-				Detail:   err.Error(),
-			})
-			return response, nil
-		}
-
-		var resourceConfig map[string]tftypes.Value
-		err = cfgVal.As(&resourceConfig)
-		if err != nil {
-			// invalid configuration schema - this shouldn't happen, bail out now
-			response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
-				Severity: tfprotov5.DiagnosticSeverityError,
-				Summary:  "Provider configuration: failed to extract 'config_path' value",
-				Detail:   err.Error(),
-			})
-			return response, nil
-		}
-
-		p.logger.Trace("[Multi-PlanResourceChange] Got old cluster config", "resourceConfig", resourceConfig)
-
-		var clusterName string
-		err = resourceConfig["cluster"].As(&clusterName)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't unpack the clustername(val=%v), got:%w", resourceConfig["cluster"], err)
-		}
-
-		if clusterName != "" {
-			// If the cluster name is empty, that means we need to create. will have to figure out the replacement stuff.
-			singleClusterProvider, found := p.singleClusterProviders[clusterName]
-			if !found {
-				return nil, fmt.Errorf("single cluster provider not found, %v", clusterName)
-			}
-			//TODO call the underlying provider.
-			p.logger.Trace("[Multi-PlanResourceChange] OLD got", "provider", singleClusterProvider, "cluster", clusterName)
-		}
-
-
+	newClusterName, diagnostics, err := p.extractClusterName(req.TypeName, req.ProposedNewState)
+	response.Diagnostics = append(response.Diagnostics, diagnostics...)
+	if err != nil {
+		return response, err
 	}
+
+	p.logger.Trace("[Multi-PlanResourceChange]", "oldClusterName", oldClusterName, "newClusterName", newClusterName)
+
+	// For now only calling the PlanResourceChange on the new cluster since we will anyway just delete it from the old one...
+	singleClusterProvider, found := p.singleClusterProviders[newClusterName]
+	if !found {
+		return response, fmt.Errorf("Requested cluster was not found in the provider.")
+	}
+
+	// The DynamicValue contains our Schema, we need to rebuild it with the schema of the underlying provider
+	remappedPriorState, err := p.singleClusterResourceDynamicValue(req.PriorState, req.TypeName)
+	if err != nil {
+		response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
+				Severity: tfprotov5.DiagnosticSeverityError,
+				Summary:  "Failed to decode PriorState parameter",
+				Detail:   err.Error(),
+			})
+	}
+	req.PriorState = remappedPriorState
+
+	remappedProposedNewState, err := p.singleClusterResourceDynamicValue(req.ProposedNewState, req.TypeName)
+	if err != nil {
+		response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
+				Severity: tfprotov5.DiagnosticSeverityError,
+				Summary:  "Failed to decode ProposedNewState parameter",
+				Detail:   err.Error(),
+			})
+	}
+	req.ProposedNewState = remappedProposedNewState
+
+	// The resource is named differently in our provider, we just need to change the TypeName to have it read properly (remove "multi")
+	req.TypeName = strings.TrimPrefix(req.TypeName, "multi")
+
+	resp, err := singleClusterProvider.PlanResourceChange(ctx, req)
+	response.Diagnostics = append(response.Diagnostics, resp.Diagnostics...)
+	if err != nil {
+		return response, fmt.Errorf("PlanResourceChange for cluster %v failed:%w", newClusterName, err)
+	}
+	response.RequiresReplace = append(response.RequiresReplace, resp.RequiresReplace...)
+	response.PlannedPrivate = resp.PlannedPrivate
+
+	// The Planned state was written in single provider schema so we map it back
+	remappedPlannedState, err := p.multiClusterResourceDynamicValueWithCluster(resp.PlannedState, req.TypeName, newClusterName)
+	if err != nil {
+		response.Diagnostics = append(response.Diagnostics, &tfprotov5.Diagnostic{
+				Severity: tfprotov5.DiagnosticSeverityError,
+				Summary:  "Failed to decode PlannedState parameter",
+				Detail:   err.Error(),
+			})
+	}
+	response.PlannedState = remappedPlannedState
+
 	return response, nil
 }
+
 func (p *Provider) ApplyResourceChange(ctx context.Context, req *tfprotov5.ApplyResourceChangeRequest) (*tfprotov5.ApplyResourceChangeResponse, error) {
 	// TODO(corentone): TBD
 	return nil, fmt.Errorf("Unimplemented 6")
@@ -503,4 +481,75 @@ func blockAsSchema(b *tfprotov5.SchemaBlock) *tfprotov5.Schema {
 
 func dump(v interface{}) hclog.Format {
 	return hclog.Fmt("%v", v)
+}
+
+func (p *Provider) extractClusterName(typeName string, val *tfprotov5.DynamicValue) (string, []*tfprotov5.Diagnostic, error){
+	diagnostics := []*tfprotov5.Diagnostic{}
+	cfgType := manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName])
+	cfgVal, err := val.Unmarshal(cfgType)
+	if err != nil {
+		diagnostics = append(diagnostics, &tfprotov5.Diagnostic{
+			Severity: tfprotov5.DiagnosticSeverityError,
+			Summary:  "Failed to decode Provider Configuration parameter",
+			Detail:   err.Error(),
+		})
+		return "", diagnostics, nil
+	}
+
+	var resourceConfig map[string]tftypes.Value
+	err = cfgVal.As(&resourceConfig)
+	if err != nil {
+		// invalid configuration schema - this shouldn't happen, bail out now
+		diagnostics = append(diagnostics, &tfprotov5.Diagnostic{
+			Severity: tfprotov5.DiagnosticSeverityError,
+			Summary:  "Provider configuration: failed to extract 'config_path' value",
+			Detail:   err.Error(),
+		})
+		return "", diagnostics, nil
+	}
+
+	p.logger.Trace("[Multi-PlanResourceChange] Got old cluster config", "resourceConfig", resourceConfig)
+
+	var clusterName string
+	err = resourceConfig["cluster"].As(&clusterName)
+	if err != nil {
+		return "", nil, fmt.Errorf("couldn't unpack the clustername(val=%v), got:%w", resourceConfig["cluster"], err)
+	}
+
+	return clusterName, diagnostics, nil
+}
+
+func (p *Provider) singleClusterResourceDynamicValue(config *tfprotov5.DynamicValue, typeName string) (*tfprotov5.DynamicValue, error) {
+	// typename is implied to be the prefixed with multi one.
+	cfgType := manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName])
+	cfgVal, err := config.Unmarshal(cfgType)
+	if err != nil {
+		return nil, err
+	}
+
+	// since the typename is the prefixed one, we remove the prefix to find in the singleCluster schema.
+	typeName = strings.TrimPrefix(typeName, "multi")
+	dn, err := tfprotov5.NewDynamicValue(manifestprovider.GetObjectTypeFromSchema(manifestprovider.GetProviderResourceSchema()[typeName]), cfgVal)
+	return &dn, err
+}
+
+func (p *Provider) multiClusterResourceDynamicValueWithCluster(config *tfprotov5.DynamicValue, typeName string, clusterName string) (*tfprotov5.DynamicValue, error) {
+	// typename is implied to be NOT prefixed
+	cfgType := manifestprovider.GetObjectTypeFromSchema(manifestprovider.GetProviderResourceSchema()[typeName])
+	cfgVal, err := config.Unmarshal(cfgType)
+	if err != nil {
+		return nil, err
+	}
+
+	// since the typename is not prefixed, we prefix it again.
+	typeName = "multi"+typeName
+
+
+	var cfgValAsMap map[string]tftypes.Value
+	err = cfgVal.As(&cfgValAsMap)
+	cfgValAsMap["cluster"] = tftypes.NewValue(tftypes.String, clusterName)
+
+	val := tftypes.NewValue(manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName]), cfgValAsMap)
+	dn, err := tfprotov5.NewDynamicValue(manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName]), val)
+	return &dn, err
 }
