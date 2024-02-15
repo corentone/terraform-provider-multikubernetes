@@ -1,16 +1,18 @@
 package genericprovider
 
 import (
-	"os"
 	"context"
+	"encoding/json"
 	"fmt"
-	"golang.org/x/exp/maps"
+	"os"
 	"strings"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
-	manifestprovider "github.com/hashicorp/terraform-provider-kubernetes/manifest/provider"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
+	manifestprovider "github.com/hashicorp/terraform-provider-kubernetes/manifest/provider"
 )
 
 
@@ -285,17 +287,105 @@ func (p *Provider) StopProvider(ctx context.Context, req *tfprotov5.StopProvider
 
 func (p *Provider) ValidateResourceTypeConfig(ctx context.Context, req *tfprotov5.ValidateResourceTypeConfigRequest) (*tfprotov5.ValidateResourceTypeConfigResponse, error) {
 	response := &tfprotov5.ValidateResourceTypeConfigResponse{}
+	// We could check that the cluster string is set here. But normally the config validation enforces it already so it's not too interesting.
 
-	// TODO(cdebains): add log and call into the config provider, but it should be no op.
+	// to call the config provider, we need to first convert the req content to the right schema (rename the resource)
+	// return p.configOnlySingleClusterProvider.ValidateResourceTypeConfig(ctx, req)
 	return response, nil
 }
 func (p *Provider) UpgradeResourceState(ctx context.Context, req *tfprotov5.UpgradeResourceStateRequest) (*tfprotov5.UpgradeResourceStateResponse, error) {
-	// TODO(corentone): TBD
-	return nil, fmt.Errorf("Unimplemented 3")
+	response := &tfprotov5.UpgradeResourceStateResponse{}
+
+	p.logger.Trace("[Multi-PlanResourceChange]", "RawStateJSON", string(req.RawState.JSON[:]))
+
+	var rawState map[string]any
+	err := json.Unmarshal(req.RawState.JSON, &rawState)
+	if err != nil {
+		return response, fmt.Errorf("could not decode RawStateJSON: %w", err)
+	}
+
+	clusterNameAsAny, found := rawState["cluster"]
+	if !found {
+		return response, fmt.Errorf("cluster not found in state")
+	}
+	clusterName := 	clusterNameAsAny.(string)
+
+	p.logger.Trace("[Multi-PlanResourceChange]", "clusterName", clusterName)
+
+	// For now only calling the PlanResourceChange on the new cluster since we will anyway just delete it from the old one...
+	singleClusterProvider, found := p.singleClusterProviders[clusterName]
+	if !found {
+		return response, fmt.Errorf("Requested cluster was not found in the provider.")
+	}
+
+	delete(rawState, "cluster")
+
+	singleClusterRawState , err := json.Marshal(rawState)
+	if err != nil {
+		return response, fmt.Errorf("could not encode RawState: %w", err)
+	}
+
+	singleClusterReq := &tfprotov5.UpgradeResourceStateRequest{
+		TypeName: strings.TrimPrefix(req.TypeName, "multi"),
+		Version: req.Version,
+		RawState: &tfprotov5.RawState{JSON:singleClusterRawState},
+	}
+
+	singleClusterResp, err := singleClusterProvider.UpgradeResourceState(ctx, singleClusterReq)
+  response.Diagnostics = append(response.Diagnostics, singleClusterResp.Diagnostics...)
+	if err != nil {
+		return response, err
+	}
+
+	// we may need to convert back the resp.
+	response.UpgradedState, err = p.multiClusterResourceDynamicValueWithCluster(singleClusterResp.UpgradedState, strings.TrimPrefix(req.TypeName, "multi"), clusterName)
+	if err != nil {
+		// swallow the error for now.
+		return response, nil
+	}
+	return response, nil
 }
 func (p *Provider) ReadResource(ctx context.Context, req *tfprotov5.ReadResourceRequest) (*tfprotov5.ReadResourceResponse, error) {
-	// TODO(corentone): TBD
-	return nil, fmt.Errorf("Unimplemented 4")
+	response := &tfprotov5.ReadResourceResponse{}
+
+	clusterName, diagnostics, err := p.extractClusterName(req.TypeName, req.CurrentState)
+	response.Diagnostics = append(response.Diagnostics, diagnostics...)
+	if err != nil {
+		return response, err
+	}
+
+	p.logger.Trace("[Multi-ReadResource]", "clusterName", clusterName)
+
+	singleClusterProvider, found := p.singleClusterProviders[clusterName]
+	if !found {
+		return response, fmt.Errorf("Requested cluster was not found in the provider.")
+	}
+
+	currentState, err := p.singleClusterResourceDynamicValue(req.CurrentState, req.TypeName)
+	if err != nil {
+		return response, err
+	}
+
+	singleClusterReq := &tfprotov5.ReadResourceRequest{
+		TypeName: strings.TrimPrefix(req.TypeName, "multi"),
+		CurrentState: currentState,
+	}
+
+	singleClusterResp, err := singleClusterProvider.ReadResource(ctx, singleClusterReq)
+	response.Diagnostics = append(response.Diagnostics, singleClusterResp.Diagnostics...)
+	if err != nil {
+		return response, err
+	}
+	response.Private = singleClusterResp.Private
+
+	p.logger.Trace("[Multi-ReadResource]", "singleClusterResp.NewState", singleClusterResp.NewState)
+	newState, err := p.multiClusterResourceDynamicValueWithCluster(singleClusterResp.NewState, strings.TrimPrefix(req.TypeName, "multi"), clusterName)
+	if err != nil {
+		return response, nil
+	}
+	response.NewState = newState
+	p.logger.Trace("[Multi-ReadResource]", "NewState", response.NewState)
+	return response, nil
 }
 func (p *Provider) PlanResourceChange(ctx context.Context, req *tfprotov5.PlanResourceChangeRequest) (*tfprotov5.PlanResourceChangeResponse, error) {
 	response := &tfprotov5.PlanResourceChangeResponse{}
@@ -370,8 +460,145 @@ func (p *Provider) PlanResourceChange(ctx context.Context, req *tfprotov5.PlanRe
 }
 
 func (p *Provider) ApplyResourceChange(ctx context.Context, req *tfprotov5.ApplyResourceChangeRequest) (*tfprotov5.ApplyResourceChangeResponse, error) {
-	// TODO(corentone): TBD
-	return nil, fmt.Errorf("Unimplemented 6")
+	response := &tfprotov5.ApplyResourceChangeResponse{}
+
+	oldClusterName, diagnostics, err := p.extractClusterName(req.TypeName, req.PriorState)
+	response.Diagnostics = append(response.Diagnostics, diagnostics...)
+	if err != nil {
+		return response, err
+	}
+	newClusterName, diagnostics, err := p.extractClusterName(req.TypeName, req.PlannedState)
+	response.Diagnostics = append(response.Diagnostics, diagnostics...)
+	if err != nil {
+		return response, err
+	}
+
+	p.logger.Trace("[Multi-ApplyResourceChange]", "oldClusterName", oldClusterName, "newClusterName", newClusterName)
+
+	var clusterToApply, clusterToDelete string
+	if oldClusterName == newClusterName {
+		// No change in cluster
+		clusterToApply = newClusterName
+	} else {
+		// Move from oldCluster to NewCluster
+		clusterToDelete = oldClusterName
+		clusterToApply = newClusterName
+
+		// if either one of the planned or prior cluster is empty, it's special cases
+		if oldClusterName == "" {
+			// Creation, no cluster to delete
+			clusterToDelete = ""
+		}
+		if newClusterName == "" {
+			// Deletion, no cluster to apply
+			clusterToApply = ""
+		}
+	}
+
+	singleClusterConfig, err := p.singleClusterResourceDynamicValue(req.Config, req.TypeName)
+	if err != nil {
+		return response, err
+	}
+
+	var clusterToDeleteResp, clusterToApplyResp *tfprotov5.ApplyResourceChangeResponse
+	if clusterToDelete != "" {
+		clusterToDeleteProvider, found := p.singleClusterProviders[clusterToDelete]
+		if !found {
+			return response, fmt.Errorf("Could not find cluster to delete provider %v", clusterToDelete)
+		}
+
+		var plannedState *tfprotov5.DynamicValue
+		if clusterToApply == "" {
+			// There is no new cluster so it's a pure deletion, the planned state is therefore good
+			plannedState, err = p.singleClusterResourceDynamicValue(req.PlannedState, req.TypeName)
+			if err != nil {
+				return response, err
+			}
+		} else {
+			// there is a new cluster, so we need to clean up the Planned State for this cluster to be deleted
+			plannedState, err = singleClusterResourceEmptyDynamicValue(req.TypeName)
+			if err != nil {
+				return response, err
+			}
+		}
+
+		priorState, err := p.singleClusterResourceDynamicValue(req.PriorState, req.TypeName)
+		if err != nil {
+			return response, err
+		}
+
+		// Request for this provider contains the type renamed, PlannedState
+		applyReq := &tfprotov5.ApplyResourceChangeRequest{
+			TypeName: strings.TrimPrefix(req.TypeName, "multi"),
+			PriorState: priorState,
+			PlannedState: plannedState,
+			Config: singleClusterConfig,
+		}
+		clusterToDeleteResp, err = clusterToDeleteProvider.ApplyResourceChange(ctx, applyReq)
+		if err != nil {
+			return response, fmt.Errorf("Failed ApplyResourceChange on %v, req:%v, err:%v", clusterToApply, applyReq, err)
+		}
+		response.Diagnostics = append(clusterToDeleteResp.Diagnostics, diagnostics...)
+		p.logger.Trace("[Multi-ApplyResourceChange] called delete", "clusterName", clusterToDeleteResp, "req", applyReq, "resp", clusterToDeleteResp)
+	}
+
+	if clusterToApply != "" {
+		clusterToApplyProvider, found := p.singleClusterProviders[clusterToApply]
+		if !found {
+			return response, fmt.Errorf("Could not find cluster to apply provider %v", clusterToApply)
+		}
+
+		var applyPriorState *tfprotov5.DynamicValue
+		if clusterToDelete == "" {
+			// same cluster or full create, we can use the req.PriorState, which is valid for this cluster
+			applyPriorState, err = p.singleClusterResourceDynamicValue(req.PriorState, req.TypeName)
+			if err != nil {
+				return response, err
+			}
+
+		} else {
+			// there is an old cluster to clean, so we are transitioning clusters, so we need to pass an empty priorState to this cluster
+			applyPriorState, err = singleClusterResourceEmptyDynamicValue(req.TypeName)
+			if err != nil {
+				return response, err
+			}
+		}
+
+		plannedState, err := p.singleClusterResourceDynamicValue(req.PlannedState, req.TypeName)
+		if err != nil {
+			return response, err
+		}
+
+		// Request for this provider contains the type renamed, PriorState
+		applyReq := &tfprotov5.ApplyResourceChangeRequest{
+			TypeName: strings.TrimPrefix(req.TypeName, "multi"),
+			PriorState: applyPriorState,
+			PlannedState: plannedState,
+			Config: singleClusterConfig,
+			PlannedPrivate: req.PlannedPrivate,
+		}
+		clusterToApplyResp, err = clusterToApplyProvider.ApplyResourceChange(ctx, applyReq)
+		if err != nil {
+			return response, fmt.Errorf("Failed ApplyResourceChange on %v, req:%v, err:%v", clusterToApply, applyReq, err)
+		}
+		response.Diagnostics = append(clusterToApplyResp.Diagnostics, diagnostics...)
+		p.logger.Trace("[Multi-ApplyResourceChange] called apply", "clusterName", clusterToApply, "req", applyReq, "resp", clusterToApplyResp)
+	}
+
+	var newState *tfprotov5.DynamicValue
+	if clusterToApply != "" {
+		newState, err = p.multiClusterResourceDynamicValueWithCluster(clusterToApplyResp.NewState, strings.TrimPrefix(req.TypeName, "multi"), clusterToApply)
+		if err != nil {
+			// slurps the error for now
+			return response, nil
+		}
+	} else {
+		// delete case
+		newState = req.PlannedState
+	}
+	response.NewState = newState
+
+	return response, nil
 }
 func (p *Provider) ImportResourceState(ctx context.Context, req *tfprotov5.ImportResourceStateRequest) (*tfprotov5.ImportResourceStateResponse, error) {
 	// TODO(corentone): TBD
@@ -519,6 +746,13 @@ func (p *Provider) extractClusterName(typeName string, val *tfprotov5.DynamicVal
 	return clusterName, diagnostics, nil
 }
 
+func singleClusterResourceEmptyDynamicValue(typeName string) (*tfprotov5.DynamicValue, error){
+	typeName = strings.TrimPrefix(typeName, "multi")
+	val := tftypes.NewValue(manifestprovider.GetObjectTypeFromSchema(manifestprovider.GetProviderResourceSchema()[typeName]), nil)
+	dn, err := tfprotov5.NewDynamicValue(manifestprovider.GetObjectTypeFromSchema(manifestprovider.GetProviderResourceSchema()[typeName]), val)
+	return &dn, err
+}
+
 func (p *Provider) singleClusterResourceDynamicValue(config *tfprotov5.DynamicValue, typeName string) (*tfprotov5.DynamicValue, error) {
 	// typename is implied to be the prefixed with multi one.
 	cfgType := manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName])
@@ -534,6 +768,10 @@ func (p *Provider) singleClusterResourceDynamicValue(config *tfprotov5.DynamicVa
 }
 
 func (p *Provider) multiClusterResourceDynamicValueWithCluster(config *tfprotov5.DynamicValue, typeName string, clusterName string) (*tfprotov5.DynamicValue, error) {
+	p.logger.Trace("[Multi-multiClusterResourceDynamicValueWithCluster] Conversion", "config", config, "typeName", typeName, "clusterName", clusterName)
+	if config == nil {
+		return nil, fmt.Errorf("config should not be nil")
+	}
 	// typename is implied to be NOT prefixed
 	cfgType := manifestprovider.GetObjectTypeFromSchema(manifestprovider.GetProviderResourceSchema()[typeName])
 	cfgVal, err := config.Unmarshal(cfgType)
@@ -552,4 +790,11 @@ func (p *Provider) multiClusterResourceDynamicValueWithCluster(config *tfprotov5
 	val := tftypes.NewValue(manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName]), cfgValAsMap)
 	dn, err := tfprotov5.NewDynamicValue(manifestprovider.GetObjectTypeFromSchema(GetProviderResourceSchema()[typeName]), val)
 	return &dn, err
+}
+
+func NewRawState(jsonMap map[string]tftypes.Value ) *tfprotov5.RawState {
+	rawStateJSON, _ := json.Marshal(jsonMap)
+	return &tfprotov5.RawState{
+		JSON: rawStateJSON,
+	}
 }
